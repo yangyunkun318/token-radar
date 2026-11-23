@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Radar — pre-token protocols ranked by implied value</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">◉</div>
+    <div>
+      <h1>TOKEN RADAR</h1>
+      <p class="sub">What a launch would be worth, before the token exists</p>
+    </div>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="board" class="active">Board</button>
+  <button data-tab="live">Already trading</button>
+  <button data-tab="model">Model &amp; calibration</button>
+  <button data-tab="sandbox">Model sandbox</button>
+</nav>
+
+<main>
+  <section id="tab-board" class="tab active">
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="Search name or slug…" aria-label="Search protocols">
+      <select id="fcat" aria-label="Filter by category"><option value="">All categories</option></select>
+      <select id="fchain" aria-label="Filter by chain"><option value="">All chains</option></select>
+      <label class="check"><input id="fwl" type="checkbox"> Watchlist only</label>
+      <select id="sort" aria-label="Sort by">
+        <option value="rank">Sort: rank</option>
+        <option value="implied">Sort: implied value</option>
+        <option value="tvl">Sort: TVL</option>
+        <option value="change">Sort: 7-day change</option>
+        <option value="age">Sort: age</option>
+      </select>
+    </div>
+    <div id="detail"></div>
+    <div class="tablewrap">
+      <table id="board">
+        <thead><tr>
+          <th data-k="rank">#</th><th data-k="name">Protocol</th><th data-k="category">Category</th>
+          <th>Chains</th><th data-k="tvl">TVL</th><th data-k="change">7d</th>
+          <th data-k="implied">Implied value</th><th data-k="multiple">× multiple</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="count" id="count"></p>
+  </section>
+
+  <section id="tab-live" class="tab">
+    <p class="lede">These protocols already trade, so the board shows the market's own value for them, never a model's. They are the calibration set: each category's multiple is the median market-cap / TVL of names like these.</p>
+    <div class="tablewrap">
+      <table id="livetab">
+        <thead><tr><th>#</th><th>Protocol</th><th>Category</th><th>Chains</th><th>TVL</th><th>Market cap</th><th>mcap / TVL</th><th>7d</th></tr></thead>
+        <tbody id="liverows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="tab-model" class="tab">
+    <div class="modelgrid">
+      <div class="card">
+        <h2>How the implied value is built</h2>
+        <p class="formula">implied = TVL × category multiple × growth × maturity</p>
+        <ul class="method">
+          <li><b>Category multiple.</b> For each category, the median market-cap / TVL of the protocols in that category that already trade, taken from this same snapshot. A category with fewer than 4 traded names falls back to the whole market's median. Multiples are clamped to 0.05 – 1.00.</li>
+          <li><b>Growth.</b> The protocol's 7-day TVL change, clamped to −60% … +120%, at half weight: 1 + growth × 0.5.</li>
+          <li><b>Maturity.</b> 0.60 + min(age, 1095 days) / 1095 × 0.40. A protocol with no listing date is scored as 365 days old.</li>
+          <li><b>Rank.</b> Rows sort by implied value, highest first. The watchlist is the floor, never the ceiling: the board ranks every rankable pre-token protocol the snapshot holds, 40 on the watchlist and the rest below it. Rankable means it records no token and is not a wrapped, staked or bridged product of a token that already trades — the same rule the watchlist itself uses — and not a versioned pool or an exchange.</li>
+        </ul>
+        <p class="note">“Records no token” is DefiLlama's record, not proof: a protocol on the list may still have a token its record does not carry. An implied value is this radar's own claim, never a prediction that a token is issued, or when.</p>
+      </div>
+      <div class="card">
+        <h2>Calibration table</h2>
+        <div class="tablewrap small"><table id="caltab">
+          <thead><tr><th>Category</th><th>Traded names</th><th>Median mcap / TVL</th><th>Multiple used</th></tr></thead>
+          <tbody id="calrows"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-sandbox" class="tab">
+    <div class="card">
+      <h2>Model sandbox</h2>
+      <p class="lede">Move the dials and the board re-ranks from the same snapshot figures. The submitted board uses the defaults; this is for checking how much the ranking depends on each assumption.</p>
+      <div class="sliders">
+        <label>Category-multiple scale <span id="v-scale">1.00×</span>
+          <input id="s-scale" type="range" min="0.5" max="2" step="0.05" value="1"></label>
+        <label>Growth weight <span id="v-growth">0.50</span>
+          <input id="s-growth" type="range" min="0" max="1" step="0.05" value="0.5"></label>
+        <label>Maturity floor <span id="v-mat">0.60</span>
+          <input id="s-mat" type="range" min="0.4" max="0.9" step="0.05" value="0.6"></label>
+      </div>
+      <div class="tablewrap small"><table id="sandtab">
+        <thead><tr><th>#</th><th>Protocol</th><th>Implied value (sandbox)</th><th>Rank on the board</th></tr></thead>
+        <tbody id="sandrows"></tbody>
+      </table></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <p>Snapshot: <span id="src"></span> · Floor $50,000,000 · Data: DefiLlama protocols, fetched 2026-11-14 · Model radar-2-calibrated</p>
+  <p>Not financial advice. Farm plans are generic steps derived from each protocol's category, chains, TVL and age; check the protocol's own pages before you move funds.</p>
+</footer>
+<script src="../data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

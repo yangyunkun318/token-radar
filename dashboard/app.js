@@ -13,33 +13,37 @@
 
   const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ESCAPES[c]);
-  const money = (n) => {
-    if (n == null) return '—';
-    if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
-    if (n >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
-    if (n >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'K';
-    return '$' + Math.round(n);
+  const money = (value) => {
+    if (value == null) return '—';
+    const units = [[1e9, 2, 'B'], [1e6, 1, 'M'], [1e3, 1, 'K']];
+    for (const [limit, digits, suffix] of units) {
+      if (value >= limit) return '$' + (value / limit).toFixed(digits) + suffix;
+    }
+    return '$' + Math.round(value);
   };
   const pct = (n) => {
     if (n == null) return '<span class="dim">—</span>';
     const cls = n >= 0 ? 'up' : 'down';
     return `<span class="${cls}">${n >= 0 ? '+' : ''}${n.toFixed(1)}%</span>`;
   };
-  const ageLabel = (d) => {
-    if (d == null) return '—';
-    if (d >= 365) return (d / 365).toFixed(1) + 'y';
-    return d + 'd';
+  const ageLabel = (days) => {
+    if (days == null) return '—';
+    if (days >= 365) return (days / 365).toFixed(1) + 'y';
+    return days + 'd';
   };
   const chainsLabel = (chains, max = 3) =>
     chains.slice(0, max).join(', ') + (chains.length > max ? ' +' + (chains.length - max) : '');
 
   /* ---- header stats ---- */
   const stat = (b, l) => `<div class="stat"><b>${b}</b><span>${l}</span></div>`;
-  const top = rows[0];
-  $('stats').innerHTML =
-    stat('758', 'protocols') + stat(String(D.watchlist_size), 'watchlist') +
-    stat(String(D.board_size), 'ranked') + stat(String(D.live_size), 'live tokens') +
-    stat(money(top ? top.implied_value_usd : 0), 'top implied');
+  const leader = rows[0];
+  $('stats').innerHTML = [
+    stat('758', 'protocols'),
+    stat(String(D.watchlist_size), 'watchlist'),
+    stat(String(D.board_size), 'ranked'),
+    stat(String(D.live_size), 'live tokens'),
+    stat(money(leader ? leader.implied_value_usd : 0), 'top implied'),
+  ].join('');
   $('src').textContent = D.source + ' · as of ' + D.as_of;
 
   /* ---- tabs ---- */
@@ -70,17 +74,18 @@
   };
 
   const filtered = () => {
-    const needle = q.value.trim().toLowerCase();
-    const list = rows.filter((r) => {
-      if (fcat.value && (r.category || 'Uncategorized') !== fcat.value) return false;
+    const query = q.value.trim().toLowerCase();
+    const matches = rows.filter((r) => {
+      if (query && r.name.toLowerCase().indexOf(query) < 0 && r.slug.indexOf(query) < 0) return false;
+      const cat = r.category || 'Uncategorized';
+      if (fcat.value && cat !== fcat.value) return false;
       if (fchain.value && r.chains.indexOf(fchain.value) < 0) return false;
       if (fwl.checked && !r.watchlist) return false;
-      if (needle && r.name.toLowerCase().indexOf(needle) < 0 && r.slug.indexOf(needle) < 0) return false;
       return true;
     });
-    list.sort(SORTS[sortKey] || SORTS.rank);
-    if (sortDir < 0) list.reverse();
-    return list;
+    matches.sort(SORTS[sortKey] || SORTS.rank);
+    if (sortDir < 0) matches.reverse();
+    return matches;
   };
 
   const boardRowHtml = (r) =>
@@ -108,15 +113,15 @@
 
   document.querySelectorAll('#board th[data-k]').forEach((th) => {
     th.addEventListener('click', () => {
-      const k = th.getAttribute('data-k');
-      if (sortKey === k) { sortDir = -sortDir; } else { sortKey = k; sortDir = 1; }
-      sortSel.value = k;
+      const key = th.getAttribute('data-k');
+      if (sortKey === key) { sortDir = -sortDir; } else { sortKey = key; sortDir = 1; }
+      sortSel.value = key;
       renderBoard();
     });
   });
-  [q, fcat, fchain, fwl, sortSel].forEach((el) => {
-    el.addEventListener('input', () => {
-      if (el === sortSel) { sortKey = sortSel.value; sortDir = 1; }
+  [q, fcat, fchain, fwl, sortSel].forEach((control) => {
+    control.addEventListener('input', () => {
+      if (control === sortSel) { sortKey = sortSel.value; sortDir = 1; }
       renderBoard();
     });
   });
@@ -132,26 +137,25 @@
     const cal = D.calibration.find((c) => c.category === (r.category || 'Uncategorized'));
     const comps = live.filter((l) => l.category === r.category).slice(0, 3);
     const base = r.tvl_usd * r.category_multiple;
-    $('detail').innerHTML =
-      '<div class="detail"><button class="close" id="dclose" aria-label="Close detail">×</button><h2>#' + r.rank + ' ' + esc(r.name) +
-      ' <span class="slug">' + esc(r.slug) + '</span>' + (r.watchlist ? '<span class="badge">WATCHLIST</span>' : '') + '</h2>' +
-      '<p class="meta">' + esc(r.category || 'Uncategorized') + ' · ' + esc(r.chains.join(', ')) +
-      ' · TVL ' + money(r.tvl_usd) + ' · 7d ' + (r.change_7d == null ? '—' : (r.change_7d >= 0 ? '+' : '') + r.change_7d.toFixed(1) + '%') +
-      ' · tracked ' + ageLabel(r.age_days) + ' · records no token</p>' +
-      '<div class="eq">' +
-      term(money(r.tvl_usd), 'TVL') + op('×') +
-      term('×' + r.category_multiple.toFixed(2), (r.category || 'Uncategorized') + ' multiple' + (cal ? ' · median of ' + cal.n + ' traded' : '')) + op('×') +
-      term('×' + r.growth_multiplier.toFixed(2), 'growth ' + (r.growth_pct >= 0 ? '+' : '') + r.growth_pct.toFixed(1) + '%') + op('×') +
-      term('×' + r.maturity_multiplier.toFixed(2), 'maturity ' + ageLabel(r.age_days)) + op('=') +
-      term(money(r.implied_value_usd), 'implied value', true) +
-      '</div>' +
-      '<p class="meta">Base value ' + money(base) + ' before growth and maturity. The category multiple is the median market-cap / TVL of traded ' +
-      esc(r.category || 'Uncategorized') + ' protocols in this snapshot' + (cal && cal.fallback ? ', falling back to the all-market median ' + D.overall_median_multiple.toFixed(2) + ' where the category has fewer than 4 traded names' : '') + '.</p>' +
-      '<h3>Farm plan</h3><ol class="steps">' +
-      r.farm_steps.map((s) => '<li>' + esc(s) + '</li>').join('') + '</ol>' +
-      (comps.length ? '<h3>Traded comparables in ' + esc(r.category || 'Uncategorized') + '</h3><p class="comps">' +
-        comps.map((l) => '<b>' + esc(l.name) + '</b> mcap ' + money(l.mcap_usd) + ' on TVL ' + money(l.tvl_usd) + ' (×' + (l.multiple == null ? '—' : l.multiple.toFixed(2)) + ')').join(' · ') + '</p>' : '') +
-      '</div>';
+    const detailParts = [
+      '<div class="detail"><button class="close" id="dclose" aria-label="Close detail">×</button>',
+      '<h2>#' + r.rank + ' ' + esc(r.name) + ' <span class="slug">' + esc(r.slug) + '</span>',
+      (r.watchlist ? '<span class="badge">WATCHLIST</span>' : '') + '</h2>',
+      '<p class="meta">' + esc(r.category || 'Uncategorized') + ' · ' + esc(r.chains.join(', ')),
+      ' · TVL ' + money(r.tvl_usd) + ' · 7d ' + (r.change_7d == null ? '—' : (r.change_7d >= 0 ? '+' : '') + r.change_7d.toFixed(1) + '%'),
+      ' · tracked ' + ageLabel(r.age_days) + ' · records no token</p>',
+      '<div class="eq">' + term(money(r.tvl_usd), 'TVL') + op('×'),
+      term('×' + r.category_multiple.toFixed(2), (r.category || 'Uncategorized') + ' multiple' + (cal ? ' · median of ' + cal.n + ' traded' : '')) + op('×'),
+      term('×' + r.growth_multiplier.toFixed(2), 'growth ' + (r.growth_pct >= 0 ? '+' : '') + r.growth_pct.toFixed(1) + '%') + op('×'),
+      term('×' + r.maturity_multiplier.toFixed(2), 'maturity ' + ageLabel(r.age_days)) + op('='),
+      term(money(r.implied_value_usd), 'implied value', true) + '</div>',
+      '<p class="meta">Base value ' + money(base) + ' before growth and maturity. The category multiple is the median market-cap / TVL of traded ',
+      esc(r.category || 'Uncategorized') + ' protocols in this snapshot' + (cal && cal.fallback ? ', falling back to the all-market median ' + D.overall_median_multiple.toFixed(2) + ' where the category has fewer than 4 traded names' : '') + '.</p>',
+      '<h3>Farm plan</h3><ol class="steps">' + r.farm_steps.map((s) => '<li>' + esc(s) + '</li>').join('') + '</ol>',
+      comps.length ? '<h3>Traded comparables in ' + esc(r.category || 'Uncategorized') + '</h3><p class="comps">' + comps.map((l) => '<b>' + esc(l.name) + '</b> mcap ' + money(l.mcap_usd) + ' on TVL ' + money(l.tvl_usd) + ' (×' + (l.multiple == null ? '—' : l.multiple.toFixed(2)) + ')').join(' · ') + '</p>' : '',
+      '</div>',
+    ];
+    $('detail').innerHTML = detailParts.join('');
     $('dclose').addEventListener('click', () => {
       selected = null;
       $('detail').innerHTML = '';
@@ -195,13 +199,13 @@
   [sScale, sGrowth, sMat].forEach((el) => el.addEventListener('input', sandbox));
 
   /* ---- deep links for screenshots ---- */
-  const params = new URLSearchParams(location.search);
-  const shot = params.get('shot');
-  if (shot === 'filtered') {
-    if (params.get('category')) { fcat.value = params.get('category'); }
-    if (params.get('watchlist')) { fwl.checked = true; }
+  const query = new URLSearchParams(location.search);
+  const view = query.get('shot');
+  if (view === 'filtered') {
+    if (query.get('category')) { fcat.value = query.get('category'); }
+    if (query.get('watchlist')) { fwl.checked = true; }
   }
   renderBoard();
   sandbox();
-  if (shot === 'detail' && params.get('slug')) { openDetail(params.get('slug')); }
+  if (view === 'detail' && query.get('slug')) { openDetail(query.get('slug')); }
 })();

@@ -11,17 +11,17 @@
 //   /output/screenshots/     the board, detail and filtered views
 //   /output/dossier.json     the vendored make.fun dossier of the above
 //
-// The page is a static page with no framework and no network: it reads the
-// data.js this program writes from the same board it shows, so the screenshots
-// and the code always agree.
+// The page is static, with no framework and no network: it reads the data.js
+// this program writes, built from the same board it shows, so the screenshots
+// and the code cannot disagree.
 //
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
+// Outside the grader's container, MAKEFUN_OUTPUT_DIR takes /output's place:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input ../input/snapshot.json
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { boardIssue, buildRadar, dataScript, parseSnapshot } from './lib/model.ts';
+import { buildRadar, boardIssue, dataScript, parseSnapshot } from './lib/model.ts';
 import { buildDossier } from './vendor/makefun-board.ts';
 
 const REPO_DIR = fileURLToPath(new URL('.', import.meta.url));
@@ -63,19 +63,19 @@ function resolveSnapshot(): string {
   return file;
 }
 
-/** Copy a directory's regular files into `to`, skipping dot-names; returns the names copied. */
-function mirrorDir(from: string, to: string): string[] {
-  if (!existsSync(from)) return [];
-  mkdirSync(to, { recursive: true });
-  const copied: string[] = [];
-  for (const name of readdirSync(from)) {
-    if (name.startsWith('.')) continue;
-    const path = join(from, name);
-    if (!statSync(path).isFile()) continue;
-    copyFileSync(path, join(to, name));
-    copied.push(name);
+/** Copy a directory's regular files into `dst`, skipping dot-names; returns the names copied. */
+function mirrorDir(src: string, dst: string): string[] {
+  if (!existsSync(src)) return [];
+  mkdirSync(dst, { recursive: true });
+  const names: string[] = [];
+  for (const entry of readdirSync(src)) {
+    if (entry.startsWith('.')) continue;
+    const entryPath = join(src, entry);
+    if (!statSync(entryPath).isFile()) continue;
+    copyFileSync(entryPath, join(dst, entry));
+    names.push(entry);
   }
-  return copied;
+  return names;
 }
 
 /** The screenshots the gate wants: exactly the board, a detail view and a filtered view. */
@@ -100,9 +100,9 @@ function dashboardBytes(): number {
 const outDir = option('output', process.env.MAKEFUN_OUTPUT_DIR ?? '/output');
 const snapshot = parseSnapshot(readFileSync(resolveSnapshot(), 'utf8'));
 const { board, radar } = buildRadar(snapshot);
-const issue = boardIssue(board, snapshot);
-if (issue !== null) {
-  process.stderr.write(`token radar: the model wrote a board the gate refuses: ${issue}\n`);
+const refusal = boardIssue(board, snapshot);
+if (refusal !== null) {
+  process.stderr.write(`token radar: the model wrote a board the gate refuses: ${refusal}\n`);
   process.exit(1);
 }
 
@@ -125,7 +125,7 @@ if (pageBytes > TEXT_CAP_BYTES) {
 }
 
 process.stdout.write(
-  `token radar: ${snapshot.protocols.length} protocols in the snapshot, ${snapshot.watchlist.length} on the watchlist, ${board.length} rows ranked (${radar.early_size} early rows beyond the watchlist, ${radar.live_size} live tokens set aside)\n` +
-    `token radar: overall median market-cap/TVL ${radar.overall_median_multiple}; top row ${board[0]!.name} at $${board[0]!.implied_value_usd.toLocaleString('en-US')}\n` +
+  `token radar: scored ${snapshot.protocols.length} protocols (${snapshot.watchlist.length} watchlist), ${board.length} rows ranked (${radar.early_size} early rows past the watchlist, ${radar.live_size} live tokens aside)\n` +
+    `token radar: median market-cap/TVL overall ${radar.overall_median_multiple}; first row ${board[0]!.name} at $${board[0]!.implied_value_usd.toLocaleString('en-US')}\n` +
     `token radar: dashboard source ${pageBytes} bytes, dossier ${dossier.length} bytes; wrote ${join(outDir, 'board.json')}, ${join(outDir, 'data.js')}, ${join(outDir, 'dashboard')}, ${join(outDir, 'screenshots')} (${shots.length} images) and ${join(outDir, 'dossier.json')}\n`,
 );

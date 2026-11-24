@@ -66,7 +66,7 @@ export const MODEL: ModelConstants = {
 };
 
 /** The model's version label: the dashboard names it and the rules quote it. */
-export const MODEL_VERSION = 'radar-2-calibrated';
+export const MODEL_VERSION = 'radar-3-farm';
 
 /** How many live-token protocols the Live token view carries, by market cap. */
 export const LIVE_ROWS = 24;
@@ -385,6 +385,28 @@ function secondActionFor(p: SnapshotProtocol, capital: number): string {
   return `Swap $${half} of USDC for the chain's gas token inside ${p.name}'s own app so the wallet also has a swap on record.`;
 }
 
+/** The category's weekly qualifying action: what the farmer does every week to stay counted,
+ * in the words of that category's own activity, so the plan is not the same paragraph for
+ * every protocol. */
+function weeklyActionFor(p: SnapshotProtocol): string {
+  const c = (p.category ?? '').toLowerCase();
+  if (c.includes('lend') || c.includes('cdp') || c.includes('collateral')) return 'Each week, borrow a small amount against the supplied collateral and repay it within the week, so the wallet shows borrow activity as well as supply.';
+  if (c.includes('dex')) return 'Each week, swap through the pool and add or remove a small amount of liquidity, so the wallet shows both swap and LP activity.';
+  if (c.includes('yield') || c.includes('leveraged farm') || c.includes('farm')) return 'Each week, claim or compound the yield once, so the wallet shows a harvest transaction.';
+  if (c.includes('bridge')) return 'Each week, bridge a small amount to a different destination chain and use it in that chain\u2019s app.';
+  if (c.includes('staking') || c.includes('restak')) return 'Each week, delegate or re-delegate a small amount and check the rewards page for new quests.';
+  if (c.includes('perpetual') || c.includes('derivative') || c.includes('options')) return 'Each week, open and close one small hedged position and keep the margin above the liquidation line.';
+  if (c.includes('prediction')) return 'Each week, settle one market position and place a new one.';
+  if (c.includes('curator') || c.includes('allocator') || c.includes('manager')) return 'Each week, check the vault\u2019s allocation report and move a small amount if the vault rebalanced.';
+  if (c.includes('stable')) return 'Each week, mint or redeem a small amount of the stable asset and hold it through the week.';
+  if (c.includes('rwa')) return 'Each week, check the distribution schedule and hold the asset through one distribution.';
+  if (c.includes('insurance')) return 'Each week, check the cover\u2019s expiry and renew it before it lapses.';
+  if (c.includes('launchpad')) return 'Each week, check the sale calendar and join the next sale\u2019s allowlist when it opens.';
+  if (c.includes('basis')) return 'Each week, check the funding rate and top up the basis position if it drifted.';
+  if (c.includes('synthetic')) return 'Each week, check the peg and mint or redeem a small amount to keep the position active.';
+  return 'Make one qualifying action each week, such as a deposit, a borrow, a swap or a vote.';
+}
+
 /**
  * A protocol's farm plan: seven steps, each an action with a cost and a time. The plan is derived
  * from the protocol's own record (category, chains, TVL, age), never from a hand-written list of names.
@@ -412,7 +434,7 @@ export function farmSteps(p: SnapshotProtocol, age: number | null): FarmStep[] {
       time: '10 minutes',
     },
     {
-      text: `Make one qualifying action each week, such as a deposit, a borrow, a swap or a vote.`,
+      text: weeklyActionFor(p),
       cost: 'about $2 of gas a week',
       time: '10 minutes a week',
     },
@@ -422,7 +444,7 @@ export function farmSteps(p: SnapshotProtocol, age: number | null): FarmStep[] {
       time: `${hold} days`,
     },
     {
-      text: `Before you withdraw, open the protocol's own points or rewards page and claim only from the link it publishes.`,
+      text: `Before you withdraw, open the protocol's own points or rewards page and claim only from the link it publishes. Check its docs and announcements for a points program, quests or a leaderboard, and finish any listed quest that fits this position.`,
       cost: 'no fee to check, and never pay to claim',
       time: '10 minutes',
     },
